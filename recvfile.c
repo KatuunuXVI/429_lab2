@@ -10,6 +10,10 @@
 #include <netdb.h>
 #define MYPORT "18005"
 #define MAXBUFLEN 100
+#define CRCR 11
+struct packet {
+    char data[41];
+};
 
 void *get_in_addr(struct sockaddr *sa) {
     if(sa->sa_family == AF_INET) return &(((struct sockaddr_in*)sa)->sin_addr);
@@ -27,7 +31,7 @@ int main(int argc, char* argv[]) {
 
     int numbytes;
     struct sockaddr_storage their_addr;
-    char buf[MAXBUFLEN];
+
     socklen_t addr_len;
     char s[INET6_ADDRSTRLEN];
 
@@ -67,15 +71,25 @@ int main(int argc, char* argv[]) {
     printf("recvfile: waiting to recvfrom...\n");
     addr_len = sizeof their_addr;
 
+    /**Receive File Size*/
+    char* buf = malloc(9);
     if((numbytes = recvfrom(sock, buf, MAXBUFLEN-1,0,(struct sockaddr*)&their_addr, &addr_len)) == -1) {
         perror("recvfrom");
-        exit(1);
+        printf("Error\n");
     }
 
-    printf("recvfile: got packet from %s\n", inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),s,sizeof s));
+    printf("recvfile: got size packet from %s\n", inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),s,sizeof s));
+
     printf("recvfile: packet is %d bytes long\n", numbytes);
-    buf[numbytes] = '\0';
-    printf("Packet: %s\n",buf);
+    //buf[numbytes] = '\0';
+    unsigned int fSize = *((unsigned long int*)buf);
+    printf("File Size: %ld\n",fSize);
+
+    unsigned char receivedCRC = *(((unsigned char*)buf)+8);
+    unsigned char expectedCRC = (unsigned char*) (fSize%CRCR);
+    printf("Received Remainder: %d\n",receivedCRC);
+    printf("Expected Remainder: %d\n", expectedCRC);
+    printf("CRC Pass: %d\n", (receivedCRC == expectedCRC));
     close(sock);
     return 0;
 }
