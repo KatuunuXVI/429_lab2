@@ -9,12 +9,95 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #define SERVERPORT "18005"
+
+struct file_info {
+    FILE* fileptr;
+    long file_len;
+};
+
+char* oferror(int error_code) {
+    switch(error_code) {
+        case -1: return "File Does Not Exist";
+        case -2: return "File could not be measured";
+        default: return "Invalid Error Code";
+    }
+}
+int open_file(struct file_info* file, const char* filepath) {
+
+    /**Open Specified File*/
+    if((file->fileptr = fopen(filepath,"rb")) == 0) return(-1);
+
+
+    /**Get Size of File*/
+    if(fseek(file->fileptr,0,SEEK_END) == 0) file->file_len = ftell(file->fileptr); else return(-2);
+
+
+
+    /**Return to start of File*/
+    rewind(file->fileptr);
+    return 0;
+}
+
+int read_file(struct file_info* file, char* buffer, int data_size) {
+    return fread(buffer, data_size, 1, file->fileptr);
+}
+
+void create_file(struct file_info* new_file, const char* file_path) {
+    new_file->fileptr = fopen(file_path, "w");
+    new_file->file_len = 0;
+}
+
+void write_file(struct file_info* dest, char* data, long data_size) {
+    int loaded = 0;
+    while(loaded < data_size) {
+        fputc(data[loaded], dest->fileptr);
+        loaded += 1;
+    }
+}
+
+
+void open(struct file_info* original, const char* filepath) {
+    //original = malloc(sizeof(struct file_info));
+
+
+}
+
+
 int main(int argc, char*argv[]) {
-    /**Copy file*/
+    int error_code;
+
+    struct file_info original;
+
+    if((error_code = open_file(&original, "navyseals.txt")) != 0) {
+        fprintf(stderr, "Open File Error: %s\n",oferror(error_code));
+        return 1;
+    }
+    char* navyseals = malloc(original.file_len);
+    printf("Read %d bytes\n",read_file(&original,navyseals,original.file_len+1));
+    printf("%s\n",navyseals);
+
+    struct file_info copy;
+    create_file(&copy,"newseals.txt");
+
+    write_file(&copy,navyseals,original.file_len);
+
+
+    return 0;
+    if(argc != 5) {
+        fprintf(stderr, "usage:sendfile -r <recv host>:<recv port> -f <subdir>/<filename>\n");
+        exit(1);
+    }
+
+    /**Open file*/
     FILE *fileptr = fopen("flick.png","rb");
+
+    /**Get Size of File*/
     fseek(fileptr,0,SEEK_END);
+
     long filelen = ftell(fileptr);
+    /**Return to start of file*/
     rewind(fileptr);
+    /**Allocate space the same size of file*/
     char *buffer = (char*) malloc(filelen * sizeof(char));
     fread(buffer, filelen, 1, fileptr);
     printf("File: %s\n",buffer);
@@ -55,10 +138,7 @@ int main(int argc, char*argv[]) {
 
     int numbytes;
 
-    if(argc != 3) {
-        fprintf(stderr, "usage:talker hostname message\n");
-        exit(1);
-    }
+
     printf("Memset\n");
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
