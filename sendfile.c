@@ -24,6 +24,33 @@ int pack_file(struct file_info* fi, struct file_packet* fp,int in,int offset) {
    fread(fp->data,400,1,fi->fileptr)
 }*/
 
+int ensure_send(int* sock, char* data, int bytes, const struct sockaddr* dest_addr, socklen_t dest_len) {
+    int bytes_sent = 0;
+    int ack_received = 0;
+    void* ackPacket = malloc(1);
+    while(!ack_received) {
+        while(bytes_sent != bytes) {
+            if((bytes_sent = sendto(*sock, data,3,0,dest_addr,dest_len)) == -1) {
+                perror("sendto");
+                printf("Error\n");
+                return -1;
+            }
+            if(bytes_sent != bytes) printf("Error: Incorrect Bytes Sent\n");
+        }
+
+        if(recvfrom(*sock, ackPacket, 1,0,NULL, dest_len) == -1) {
+            perror("recvfrom");
+            printf("Error\n");
+            return -1;
+        } else {
+            ack_received = 1;
+        }
+    }
+    free(ackPacket);
+
+    return 0;
+}
+
 int main(int argc, char*argv[]) {
 
 
@@ -137,15 +164,7 @@ int main(int argc, char*argv[]) {
 
 
 
-    char* filenameDir = argv[4];
-    int i = 0;
-    int fp = 0;
-    int dFound = 0;
-    while(i < strlen(filenameDir)) {
-        if(filenameDir[i] == '\\') fp = i+1;
-        i++;
-    }
-    const char* filename = filenameDir + fp;
+    const char* filename =  argv[4];
 
     printf("Filename: %s\n",filename);
 
@@ -157,6 +176,10 @@ int main(int argc, char*argv[]) {
     *remainder = (*file_name_len%CRC);
     numbytes = 0;
     printf("FIlename Len: %d\n", *file_name_len);
+
+    ensure_send(&sock,(char*) file_name_len_pack,3,p->ai_addr,p->ai_addrlen);
+    printf("Ensured\n");
+    return 0;
     while(numbytes != 3) {
         if((numbytes = sendto(sock, file_name_len_pack,3,0,p->ai_addr,p->ai_addrlen)) == -1) {
             perror("Error Sending Filename Length\n");
@@ -173,6 +196,9 @@ int main(int argc, char*argv[]) {
         printf("Error\n");
     }
     printf("Filename Length Acknowledgement\n");
+
+    int file_name_sent = 0;
+
 
 
     freeaddrinfo(servinfo);

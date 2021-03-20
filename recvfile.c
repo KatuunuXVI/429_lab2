@@ -110,6 +110,7 @@ int main(int argc, char* argv[]) {
     }
     }
     short int* file_name_len = (short int*) buf;
+    char filename[*file_name_len];
     printf("File Name Length: %d\n", *file_name_len);
     expectedCRC = (*file_name_len)%11;
     receivedCRC = *((unsigned char*) (buf+2));
