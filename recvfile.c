@@ -21,6 +21,7 @@ void *get_in_addr(struct sockaddr *sa) {
 }
 
 int main(int argc, char* argv[]) {
+
     if(argc < 3) {printf("Format: recvfile -p <recv_port>\n"); return -1;}
 
     char* port = argv[2];
@@ -66,17 +67,20 @@ int main(int argc, char* argv[]) {
         return 2;
     }
 
-    freeaddrinfo(servinfo);
+    //freeaddrinfo(servinfo);
 
     printf("recvfile: waiting to recvfrom...\n");
     addr_len = sizeof their_addr;
 
     /**Receive File Size*/
     char* buf = malloc(9);
-    if((numbytes = recvfrom(sock, buf, MAXBUFLEN-1,0,(struct sockaddr*)&their_addr, &addr_len)) == -1) {
-        perror("recvfrom");
-        printf("Error\n");
+    while(numbytes != 9) {
+        if((numbytes = recvfrom(sock, buf, MAXBUFLEN-1,0,(struct sockaddr*)&their_addr, &addr_len)) == -1) {
+            perror("recvfrom");
+            printf("Error\n");
+        }
     }
+
 
     printf("recvfile: got size packet from %s\n", inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),s,sizeof s));
 
@@ -86,10 +90,32 @@ int main(int argc, char* argv[]) {
     printf("File Size: %ld\n",fSize);
 
     unsigned char receivedCRC = *(((unsigned char*)buf)+8);
-    unsigned char expectedCRC = (unsigned char*) (fSize%CRCR);
-    printf("Received Remainder: %d\n",receivedCRC);
-    printf("Expected Remainder: %d\n", expectedCRC);
-    printf("CRC Pass: %d\n", (receivedCRC == expectedCRC));
+    unsigned char expectedCRC = (unsigned char) (fSize%CRCR);
+
+    int CRCPass = (receivedCRC == expectedCRC);
+    printf("CRC Pass: %d\n", CRCPass);
+
+
+    void* ack = malloc(1);
+    
+    printf("Sending %d\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
+    perror("Sending Acknowledgement");
+
+    realloc(buf,2); /**Max File Size is 255, thus small enough for a short*/
+    printf("Waiting for Filename Length\n");
+    while(numbytes != 3) {
+    if((numbytes = recvfrom(sock, buf, MAXBUFLEN-1,0,(struct sockaddr*)&their_addr, &addr_len)) == -1) {
+        perror("recvfrom");
+        printf("Error\n");
+    }
+    }
+    short int* file_name_len = (short int*) buf;
+    printf("File Name Length: %d\n", *file_name_len);
+    expectedCRC = (*file_name_len)%11;
+    receivedCRC = *((unsigned char*) (buf+2));
+    int crc = expectedCRC == receivedCRC;
+    if(crc) sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr));
+    free(buf);
     close(sock);
     return 0;
 }

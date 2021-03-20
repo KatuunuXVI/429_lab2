@@ -12,7 +12,7 @@
 #include "fileinfo.h"
 #define SERVERPORT "18005"
 #define MAXBUFLEN 100
-#define CRCR 11
+#define CRC 11
 
 struct file_packet {
     short int index;
@@ -25,6 +25,9 @@ int pack_file(struct file_info* fi, struct file_packet* fp,int in,int offset) {
 }*/
 
 int main(int argc, char*argv[]) {
+
+
+
 
     /*
     int error_code;
@@ -57,6 +60,8 @@ int main(int argc, char*argv[]) {
         fprintf(stderr, "usage:sendfile -r <recv host>:<recv port> -f <subdir>/<filename>\n");
         exit(1);
     }
+
+
 
     /**Open File*/
     struct file_info to_send;
@@ -98,7 +103,7 @@ int main(int argc, char*argv[]) {
 
     /**Set Timeout Window*/
     struct timeval tv;
-    tv.tv_sec = 8;
+    tv.tv_sec = 20;
     tv.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
@@ -121,20 +126,53 @@ int main(int argc, char*argv[]) {
 
     void* ackPacket = malloc(2);
     printf("Awaiting Response\n");
-    if((numbytes = recvfrom(sock, ackPacket, 2,0,p->ai_addr, p->ai_addrlen)) == -1) {
+    if((numbytes = recvfrom(sock, ackPacket, 8,0,NULL, p->ai_addrlen)) == -1) {
         perror("recvfrom");
         printf("Error\n");
     }
-    short int ack = (short int*) ackPacket;
-    if(ack == 0) printf("Filesize Acknowledgement\n"); else printf("Bad Size Sent\n");
+    printf("Bytes Received: %d\n",numbytes);
+
+    printf("Filesize Acknowledgement\n");
 
 
 
-    /*
-    if((numbytes = sendto(sock, argv[2],strlen(argv[2]),0,p->ai_addr,p->ai_addrlen)) == -1) {
-        perror("Error Sending File: sendto\n");
-        exit(1);
-    }*/
+
+    char* filenameDir = argv[4];
+    int i = 0;
+    int fp = 0;
+    int dFound = 0;
+    while(i < strlen(filenameDir)) {
+        if(filenameDir[i] == '\\') fp = i+1;
+        i++;
+    }
+    const char* filename = filenameDir + fp;
+
+    printf("Filename: %s\n",filename);
+
+    void* file_name_len_pack = malloc(3);
+
+    short int* file_name_len = file_name_len_pack;
+    *file_name_len = strlen(filename);
+    remainder = ((unsigned char*) file_name_len_pack) + 2;
+    *remainder = (*file_name_len%CRC);
+    numbytes = 0;
+    printf("FIlename Len: %d\n", *file_name_len);
+    while(numbytes != 3) {
+        if((numbytes = sendto(sock, file_name_len_pack,3,0,p->ai_addr,p->ai_addrlen)) == -1) {
+            perror("Error Sending Filename Length\n");
+            exit(1);
+        }
+        if(numbytes != 3) fprintf(stderr,"Incorrect Byte Num Sent, resending\n");
+    }
+
+
+    free(ackPacket);
+    ackPacket = malloc(1);
+    if((numbytes = recvfrom(sock, ackPacket, 1,0,NULL, p->ai_addrlen)) == -1) {
+        perror("recvfrom");
+        printf("Error\n");
+    }
+    printf("Filename Length Acknowledgement\n");
 
 
     freeaddrinfo(servinfo);
