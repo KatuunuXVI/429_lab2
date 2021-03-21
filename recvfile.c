@@ -120,22 +120,49 @@ int main(int argc, char* argv[]) {
 
     /**Receive File*/
     struct file_info new_file;
-    create_file(&new_file,"new_seals.txt");
+    create_file(&new_file,"metalocalypse.wmv");
     long unsigned int bytes_received = 0;
-    char* file_holder = malloc(*file_size);
-    while(bytes_received < *file_size) {
-        if(*file_size - bytes_received > 256) {
-            bytes_received += recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index);
-            printf("%ul bytes received\n",bytes_received);
-            printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
-        } else {
-            bytes_received += recv_data(&sock,file_holder+bytes_received,(*file_size) - bytes_received,(struct sockaddr*)&their_addr,&addr_len,&index);
-            printf("%ul bytes received\n",bytes_received);
-            printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
+    char* file_holder;
+    if(*file_size < 1000000) {
+        file_holder = malloc(*file_size);
+        while(bytes_received < *file_size) {
+            if(*file_size - bytes_received > 256) {
+                bytes_received += recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index);
+                printf("%ul bytes received\n",bytes_received);
+                printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
+            } else {
+                bytes_received += recv_data(&sock,file_holder+bytes_received,(*file_size) - bytes_received,(struct sockaddr*)&their_addr,&addr_len,&index);
+                printf("%ul bytes received\n",bytes_received);
+                printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
+            }
+        }
+        write_file(&new_file,file_holder,*file_size);
+    } else {
+        while(new_file.file_len < *file_size) {
+            int file_block = (*file_size) - new_file.file_len > 1000000 ? 1000000 : (*file_size) - new_file.file_len;
+            printf("File Block: %d\n",file_block);
+            file_holder = malloc(file_block);
+            printf("File Holder Allocated\n");
+            while(bytes_received < file_block) {
+                if(*file_size - bytes_received > 256) {
+                    bytes_received += recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index);
+                    printf("%ul bytes received\n",bytes_received);
+                    printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
+                } else {
+                    bytes_received += recv_data(&sock,file_holder+bytes_received,(*file_size) - bytes_received,(struct sockaddr*)&their_addr,&addr_len,&index);
+                    printf("%ul bytes received\n",bytes_received);
+                    printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
+                }
+            }
+            printf("Writing File\n");
+            write_file(&new_file,file_holder,*file_size);
+            printf("Free FIle Holder\n");
+            free(file_holder);
         }
     }
 
-    write_file(&new_file,file_holder,*file_size);
+
+
     return 0;
 
 }

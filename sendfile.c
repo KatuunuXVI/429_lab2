@@ -45,7 +45,7 @@ int clean_send(int* sock, char* data, int bytes, const struct sockaddr* dest_add
 
 int send_data(int* sock, char* data, int bytes, const struct sockaddr* dest_addr, socklen_t dest_len, unsigned char* index) {
     if(bytes > 256) {
-        printf("Error: Can only send 32 frames (256 bytes) at a time");
+        printf("Error: Can only send 32 frames (256 bytes) at a time\n");
         return -1;
     }
     struct data_packet packet;
@@ -189,16 +189,18 @@ int main(int argc, char*argv[]) {
     free(file_size);
 
     /**Send File*/
+    unsigned long int bytes_sent = 0;
     if(to_send.file_len < 1000000) {
         char* file_holder = malloc(to_send.file_len);
-        unsigned long int bytes_sent = 0;
         read_file(&to_send,file_holder,to_send.file_len);
         while(bytes_sent < to_send.file_len) {
             if(to_send.file_len - bytes_sent > 256) {
+                printf("Sending %ul bytes\n",256);
                 send_data(&sock,file_holder+bytes_sent,256,p->ai_addr,p->ai_addrlen,&send_index);
                 bytes_sent += 256;
                 printf("%ul bytes sent\n",bytes_sent);
             } else {
+                printf("Sending %ul bytes\n",to_send.file_len - bytes_sent);
                 bytes_sent += send_data(&sock,file_holder+bytes_sent,to_send.file_len - bytes_sent,p->ai_addr,p->ai_addrlen,&send_index);
                 bytes_sent = to_send.file_len;
                 printf("%ul bytes sent\n",bytes_sent);
@@ -207,8 +209,24 @@ int main(int argc, char*argv[]) {
 
     } else {
         //TODO: Manage Heavy files
-        char* file_holder = malloc(1000000);
-        return 0;
+        char* file_holder;
+        while(to_send.file_position < to_send.file_len) {
+            int file_block = to_send.file_len - to_send.file_position > 1000000 ? 1000000 : to_send.file_len - to_send.file_position;
+            file_holder = malloc(file_block);
+            read_file(&to_send,file_holder,file_block);
+            while(bytes_sent < file_block) {
+                if(file_block - bytes_sent > 256) {
+                    send_data(&sock,file_holder+bytes_sent,256,p->ai_addr,p->ai_addrlen,&send_index);
+                    bytes_sent += 256;
+                    printf("%ul bytes sent\n",bytes_sent);
+                } else {
+                    bytes_sent += send_data(&sock,file_holder+bytes_sent,file_block - bytes_sent,p->ai_addr,p->ai_addrlen,&send_index);
+                    bytes_sent = to_send.file_len;
+                    printf("%ul bytes sent\n",bytes_sent);
+                }
+            }
+            free(file_holder);
+        }
     }
 
     return 0;
