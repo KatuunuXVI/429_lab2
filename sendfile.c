@@ -66,17 +66,20 @@ int send_data(int* sock, char* data, int bytes, const struct sockaddr* dest_addr
                 printf("Error: Incorrect Bytes Sent: %d\n",bytes_sent);
             }
         }
-        printf("Receiveing\n");
+        printf("Receiving\n");
         if(recvfrom(*sock, ackPacket, 1,0,NULL, dest_len) == -1) {
             perror("recvfrom");
             printf("Error\n");
             return -1;
         } else {
             ack_received = 1;
+            printf("Send Succesful\n");
         }
     }
     free(ackPacket);
     (*index)++;
+
+    return *index;
 }
 
 
@@ -173,84 +176,43 @@ int main(int argc, char*argv[]) {
     unsigned char send_index = 0;
     send_data(&sock,file_name_len,8,p->ai_addr,p->ai_addrlen, &send_index);
 
-    return 0;
+
+    /**Send Filename*/
+    send_data(&sock,filename,*file_name_len,p->ai_addr,p->ai_addrlen, &send_index);
+    free(file_name_len);
 
     /**Send Filesize*/
-    void* sendPacket = malloc(9);
-    unsigned long int* fsize = (unsigned long int*) sendPacket;
-    *fsize = to_send.file_len;
-    printf("FIle Size %d\n",  to_send.file_len);
-    unsigned char* remainder = (unsigned char*) sendPacket + 8;
-    *remainder = (unsigned char) (to_send.file_len%11);
-    printf("File Size: %ld\n",*((unsigned long int*) sendPacket));
-    printf("CRC Value: %d\n",*remainder);
-    printf("Ensure Sending File Size\n");
-    clean_send(&sock,(char*) sendPacket,9,p->ai_addr,p->ai_addrlen);
-    printf("File Size Sent");
-    /*
-    while(numbytes != 9) {
-        if((numbytes = sendto(sock, sendPacket,9,0,p->ai_addr,p->ai_addrlen)) == -1) {
-            perror("Error Sending File: sendto\n");
-            exit(1);
+    char* file_size = malloc(8);
+    *((unsigned long int*)file_size) = to_send.file_len;
+    printf("File Size: %ul\n",to_send.file_len);
+    send_data(&sock,file_size,8,p->ai_addr,p->ai_addrlen, &send_index);
+    free(file_size);
+
+    /**Send File*/
+    if(to_send.file_len < 1000000) {
+        char* file_holder = malloc(to_send.file_len);
+        unsigned long int bytes_sent = 0;
+        read_file(&to_send,file_holder,to_send.file_len);
+        while(bytes_sent < to_send.file_len) {
+            if(to_send.file_len - bytes_sent > 256) {
+                send_data(&sock,file_holder+bytes_sent,256,p->ai_addr,p->ai_addrlen,&send_index);
+                bytes_sent += 256;
+                printf("%ul bytes sent\n",bytes_sent);
+            } else {
+                bytes_sent += send_data(&sock,file_holder+bytes_sent,to_send.file_len - bytes_sent,p->ai_addr,p->ai_addrlen,&send_index);
+                bytes_sent = to_send.file_len;
+                printf("%ul bytes sent\n",bytes_sent);
+            }
         }
+
+    } else {
+        //TODO: Manage Heavy files
+        char* file_holder = malloc(1000000);
+        return 0;
     }
-    printf("Sent %d bytes to recvfile\n",numbytes);
-    free(sendPacket);
-
-    void* ackPacket = malloc(2);
-    printf("Awaiting Response\n");
-    if((numbytes = recvfrom(sock, ackPacket, 8,0,NULL, p->ai_addrlen)) == -1) {
-        perror("recvfrom");
-        printf("Error\n");
-    }
-    printf("Bytes Received: %d\n",numbytes);
-
-    printf("Filesize Acknowledgement\n");
-    */
-
-
-
-
-
-    printf("Filename: %s\n",filename);
-
-    void* file_name_len_pack = malloc(3);
-
-    //short int* file_name_len = file_name_len_pack;
-    *file_name_len = strlen(filename);
-    remainder = ((unsigned char*) file_name_len_pack) + 2;
-    *remainder = (*file_name_len%CRC);
-    numbytes = 0;
-    printf("FIlename Len: %d\n", *file_name_len);
-
-    clean_send(&sock,(char*) file_name_len_pack,3,p->ai_addr,p->ai_addrlen);
 
     return 0;
-    while(numbytes != 3) {
-        if((numbytes = sendto(sock, file_name_len_pack,3,0,p->ai_addr,p->ai_addrlen)) == -1) {
-            perror("Error Sending Filename Length\n");
-            exit(1);
-        }
-        if(numbytes != 3) fprintf(stderr,"Incorrect Byte Num Sent, resending\n");
-    }
 
 
-    //free(ackPacket);
-    //ackPacket = malloc(1);
-    /*if((numbytes = recvfrom(sock, ackPacket, 1,0,NULL, p->ai_addrlen)) == -1) {
-        perror("recvfrom");
-        printf("Error\n");
-    }
-    printf("Filename Length Acknowledgement\n");*/
-
-    int file_name_sent = 0;
-
-
-
-    freeaddrinfo(servinfo);
-    close(sock);
-
-
-    return 0;
 
 }
