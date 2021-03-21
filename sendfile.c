@@ -14,28 +14,20 @@
 #define MAXBUFLEN 100
 #define CRC 11
 
-struct file_packet {
-    short int index;
-    char data[400];
-};
-/*
-int pack_file(struct file_info* fi, struct file_packet* fp,int in,int offset) {
-   fp.index = in;
-   fread(fp->data,400,1,fi->fileptr)
-}*/
 
-int ensure_send(int* sock, char* data, int bytes, const struct sockaddr* dest_addr, socklen_t dest_len) {
+
+int clean_send(int* sock, char* data, int bytes, const struct sockaddr* dest_addr, socklen_t dest_len) {
     int bytes_sent = 0;
     int ack_received = 0;
     void* ackPacket = malloc(1);
     while(!ack_received) {
-        while(bytes_sent != bytes) {
-            if((bytes_sent = sendto(*sock, data,3,0,dest_addr,dest_len)) == -1) {
+        while(bytes_sent != sizeof(struct data_packet)) {
+            if((bytes_sent = sendto(*sock, data,sizeof(struct data_packet),0,dest_addr,dest_len)) == -1) {
                 perror("sendto");
                 printf("Error\n");
                 return -1;
             }
-            if(bytes_sent != bytes) printf("Error: Incorrect Bytes Sent\n");
+            if(bytes_sent != bytes) printf("Error: Incorrect Bytes Sent: %d\n",bytes_sent);
         }
 
         if(recvfrom(*sock, ackPacket, 1,0,NULL, dest_len) == -1) {
@@ -51,13 +43,52 @@ int ensure_send(int* sock, char* data, int bytes, const struct sockaddr* dest_ad
     return 0;
 }
 
+int send_data(int* sock, char* data, int bytes, const struct sockaddr* dest_addr, socklen_t dest_len, unsigned char* index) {
+    if(bytes > 256) {
+        printf("Error: Can only send 32 frames (256 bytes) at a time");
+        return -1;
+    }
+    struct data_packet packet;
+    packet.index = index;
+    write_data_to_packet(&packet,data,bytes);
+    int bytes_sent = 0;
+    int ack_received = 0;
+    void* ackPacket = malloc(1);
+    while(!ack_received) {
+        while(bytes_sent != sizeof(packet)) {
+
+            if((bytes_sent = sendto(*sock, &packet,sizeof(packet),0,dest_addr,dest_len)) == -1) {
+                perror("sendto");
+                printf("Error\n");
+                return -1;
+            }
+            if(bytes_sent != sizeof(packet)) {
+                printf("Error: Incorrect Bytes Sent: %d\n",bytes_sent);
+            }
+        }
+        printf("Receiveing\n");
+        if(recvfrom(*sock, ackPacket, 1,0,NULL, dest_len) == -1) {
+            perror("recvfrom");
+            printf("Error\n");
+            return -1;
+        } else {
+            ack_received = 1;
+        }
+    }
+    free(ackPacket);
+    (*index)++;
+}
+
+
 int main(int argc, char*argv[]) {
 
 
 
+    const char* sample = "Your mother is upset with you anon\n";
 
-    /*
-    int error_code;
+
+    /*a
+    int error_code;/
     struct file_info original;
     if((error_code = open_file(&original, "../ur/command.wmv")) != 0) return -1;
 
@@ -134,15 +165,30 @@ int main(int argc, char*argv[]) {
     tv.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
+    /**Send Filename Length*/
+    //send_data(int* sock, char* data, int bytes, const struct sockaddr* dest_addr, socklen_t dest_len, unsigned char index) {
+    const char* filename =  argv[4];
+    char* file_name_len = malloc(8);
+    *((unsigned long int*)file_name_len) = strlen(filename);
+    unsigned char send_index = 0;
+    send_data(&sock,file_name_len,8,p->ai_addr,p->ai_addrlen, &send_index);
+
+    return 0;
+
     /**Send Filesize*/
     void* sendPacket = malloc(9);
     unsigned long int* fsize = (unsigned long int*) sendPacket;
     *fsize = to_send.file_len;
+    printf("FIle Size %d\n",  to_send.file_len);
     unsigned char* remainder = (unsigned char*) sendPacket + 8;
     *remainder = (unsigned char) (to_send.file_len%11);
     printf("File Size: %ld\n",*((unsigned long int*) sendPacket));
     printf("CRC Value: %d\n",*remainder);
-    while(numbytes != 9) { /**long plus */
+    printf("Ensure Sending File Size\n");
+    clean_send(&sock,(char*) sendPacket,9,p->ai_addr,p->ai_addrlen);
+    printf("File Size Sent");
+    /*
+    while(numbytes != 9) {
         if((numbytes = sendto(sock, sendPacket,9,0,p->ai_addr,p->ai_addrlen)) == -1) {
             perror("Error Sending File: sendto\n");
             exit(1);
@@ -160,25 +206,25 @@ int main(int argc, char*argv[]) {
     printf("Bytes Received: %d\n",numbytes);
 
     printf("Filesize Acknowledgement\n");
+    */
 
 
 
 
-    const char* filename =  argv[4];
 
     printf("Filename: %s\n",filename);
 
     void* file_name_len_pack = malloc(3);
 
-    short int* file_name_len = file_name_len_pack;
+    //short int* file_name_len = file_name_len_pack;
     *file_name_len = strlen(filename);
     remainder = ((unsigned char*) file_name_len_pack) + 2;
     *remainder = (*file_name_len%CRC);
     numbytes = 0;
     printf("FIlename Len: %d\n", *file_name_len);
 
-    ensure_send(&sock,(char*) file_name_len_pack,3,p->ai_addr,p->ai_addrlen);
-    printf("Ensured\n");
+    clean_send(&sock,(char*) file_name_len_pack,3,p->ai_addr,p->ai_addrlen);
+
     return 0;
     while(numbytes != 3) {
         if((numbytes = sendto(sock, file_name_len_pack,3,0,p->ai_addr,p->ai_addrlen)) == -1) {
@@ -189,13 +235,13 @@ int main(int argc, char*argv[]) {
     }
 
 
-    free(ackPacket);
-    ackPacket = malloc(1);
-    if((numbytes = recvfrom(sock, ackPacket, 1,0,NULL, p->ai_addrlen)) == -1) {
+    //free(ackPacket);
+    //ackPacket = malloc(1);
+    /*if((numbytes = recvfrom(sock, ackPacket, 1,0,NULL, p->ai_addrlen)) == -1) {
         perror("recvfrom");
         printf("Error\n");
     }
-    printf("Filename Length Acknowledgement\n");
+    printf("Filename Length Acknowledgement\n");*/
 
     int file_name_sent = 0;
 

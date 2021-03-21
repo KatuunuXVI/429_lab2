@@ -8,9 +8,10 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include "fileinfo.h"
 #define MYPORT "18005"
 #define MAXBUFLEN 100
-#define CRCR 11
+
 struct packet {
     char data[41];
 };
@@ -18,6 +19,47 @@ struct packet {
 void *get_in_addr(struct sockaddr *sa) {
     if(sa->sa_family == AF_INET) return &(((struct sockaddr_in*)sa)->sin_addr);
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+
+
+int recv_data(int* sock, char* buffer, int bytes, const struct sockaddr* source_addr, socklen_t* source_len, unsigned char* index) {
+    printf("Recv Data\n");
+    int bytes_received = 0;
+    char* ackPacket = malloc(1);
+    *ackPacket = 'a';
+    int clean_packet = 0;
+    struct data_packet* recv_packet = malloc(sizeof(struct data_packet));
+    //char* rp = malloc(sizeof(struct data_packet));
+    printf("Recv Allocated\n");
+    //while(!clean_packet) {
+
+        while(bytes_received != sizeof(struct data_packet)) {
+            printf("BLocking\n");
+            if((bytes_received = recvfrom(*sock,recv_packet,sizeof(struct data_packet),0,source_addr,source_len)) == -1) {
+                perror("Bytes Received\n");
+                return -1;
+            }
+        }
+        clean_packet = check_packet_integrity(recv_packet);
+        printf("Clean packet: %d\n", clean_packet);
+        /*if(!clean_packet) {
+            printf("Corrupted Packet, waiting for new packet\n");
+        } else if(recv_packet->index < *index) {
+            printf("Duplicate Packet, Resending Acknowledgement\n");
+            while(sendto(*sock, &ackPacket, 1,0,*source_addr, sizeof(*source_addr)) == -1) {
+                perror("Acknowledgement Failed\n");
+            }
+        }else {
+            while(sendto(*sock, &ackPacket, 1,0,*source_addr, sizeof(*source_addr)) == -1) {
+                perror("Acknowledgement Failed, Retrying\n");
+            }
+            index++;
+        }*/
+
+
+    return read_data_from_packet(recv_packet,buffer,bytes);
+
 }
 
 int main(int argc, char* argv[]) {
@@ -72,6 +114,15 @@ int main(int argc, char* argv[]) {
     printf("recvfile: waiting to recvfrom...\n");
     addr_len = sizeof their_addr;
 
+    /**Receive FIlename Length*/
+    unsigned char index = 0;
+    long unsigned int* file_name_len = malloc(8);
+    recv_data(&sock,file_name_len,8,(struct sockaddr*)&their_addr,&addr_len, &index);
+    void* ack = malloc(1);
+    printf("Sending %d\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
+    printf("Filename Length: %d\n",*file_name_len);
+    return 0;
+
     /**Receive File Size*/
     char* buf = malloc(9);
     while(numbytes != 9) {
@@ -90,13 +141,13 @@ int main(int argc, char* argv[]) {
     printf("File Size: %ld\n",fSize);
 
     unsigned char receivedCRC = *(((unsigned char*)buf)+8);
-    unsigned char expectedCRC = (unsigned char) (fSize%CRCR);
+    unsigned char expectedCRC = (unsigned char) (fSize%CRC);
 
     int CRCPass = (receivedCRC == expectedCRC);
     printf("CRC Pass: %d\n", CRCPass);
 
 
-    void* ack = malloc(1);
+    //void* ack = malloc(1);
     
     printf("Sending %d\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
     perror("Sending Acknowledgement");
@@ -109,8 +160,8 @@ int main(int argc, char* argv[]) {
         printf("Error\n");
     }
     }
-    short int* file_name_len = (short int*) buf;
-    char filename[*file_name_len];
+    /*short int* file_name_len = (short int*) buf;
+    /char filename[*file_name_len];
     printf("File Name Length: %d\n", *file_name_len);
     expectedCRC = (*file_name_len)%11;
     receivedCRC = *((unsigned char*) (buf+2));
@@ -118,5 +169,5 @@ int main(int argc, char* argv[]) {
     if(crc) sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr));
     free(buf);
     close(sock);
-    return 0;
+    return 0;*/
 }
