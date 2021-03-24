@@ -1,2 +1,0 @@
-make recvfile
-./recvfile -p 18005
