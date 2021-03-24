@@ -1,6 +1,6 @@
-#include <stdio.h>
+
 #include <stdlib.h>
-#include <unistd.h>
+
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
@@ -66,14 +66,14 @@ int send_data(int* sock, char* data, int bytes, const struct sockaddr* dest_addr
                 printf("Error: Incorrect Bytes Sent: %d\n",bytes_sent);
             }
         }
-        printf("Receiving\n");
+        //printf("Receiving\n");
         if(recvfrom(*sock, ackPacket, 1,0,NULL, dest_len) == -1) {
             perror("recvfrom");
             printf("Error\n");
             return -1;
         } else {
             ack_received = 1;
-            printf("Send Succesful\n");
+            //printf("Send Succesful\n");
         }
     }
     free(ackPacket);
@@ -94,11 +94,8 @@ int main(int argc, char*argv[]) {
     int error_code;/
     struct file_info original;
     if((error_code = open_file(&original, "../ur/command.wmv")) != 0) return -1;
-
-
     printf("FIle Size: %d\n", original.file_len);
     //printf("%s\n",navyseals);
-
     struct file_info copy;
     printf("Creating Ur\n");
     if(create_file(&copy,"../ur/numand.wmv") != 0) return -1;
@@ -113,9 +110,6 @@ int main(int argc, char*argv[]) {
         write_file(&copy,data,read-prev_read);
         free(data);
     }
-
-
-
     return 0;*/
     if(argc != 5) {
         fprintf(stderr, "usage:sendfile -r <recv host>:<recv port> -f <subdir>/<filename>\n");
@@ -124,10 +118,21 @@ int main(int argc, char*argv[]) {
 
 
 
-    /**Open File*/
+    /**Open File*///
     struct file_info to_send;
     open_file(&to_send,argv[4]);
 
+    /*struct file_info to_write;
+    create_file(&to_write,"copy.png");
+    printf("File Length: %ul\n",to_send.file_len);
+    char* fb = malloc(to_send.file_len);
+    printf("FB: %s\n",fb);
+    read_file(&to_send,fb,to_send.file_len);
+    printf("FB: %s\n",fb);
+    write_file(&to_write,fb,to_send.file_len);
+    printf("File Length: %ul\n",fseek(to_write.fileptr,0,SEEK_END));
+    fclose(to_write.fileptr);
+    return 0;*/
     int sock;
     struct addrinfo hints, *servinfo, *p;
 
@@ -188,22 +193,22 @@ int main(int argc, char*argv[]) {
     send_data(&sock,file_size,8,p->ai_addr,p->ai_addrlen, &send_index);
     free(file_size);
 
-    /**Send File*/
+    /**Send File*///
     unsigned long int bytes_sent = 0;
     if(to_send.file_len < 1000000) {
         char* file_holder = malloc(to_send.file_len);
         read_file(&to_send,file_holder,to_send.file_len);
         while(bytes_sent < to_send.file_len) {
             if(to_send.file_len - bytes_sent > 256) {
-                printf("Sending %ul bytes\n",256);
+                //printf("Sending %ul bytes\n",256);
                 send_data(&sock,file_holder+bytes_sent,256,p->ai_addr,p->ai_addrlen,&send_index);
                 bytes_sent += 256;
-                printf("%ul bytes sent\n",bytes_sent);
+                //printf("%ul bytes sent\n",bytes_sent);
             } else {
-                printf("Sending %ul bytes\n",to_send.file_len - bytes_sent);
+                //printf("Sending %ul bytes\n",to_send.file_len - bytes_sent);
                 bytes_sent += send_data(&sock,file_holder+bytes_sent,to_send.file_len - bytes_sent,p->ai_addr,p->ai_addrlen,&send_index);
                 bytes_sent = to_send.file_len;
-                printf("%ul bytes sent\n",bytes_sent);
+                //printf("%ul bytes sent\n",bytes_sent);
             }
         }
 

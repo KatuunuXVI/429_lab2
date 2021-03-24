@@ -1,6 +1,4 @@
-#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
@@ -120,7 +118,7 @@ int main(int argc, char* argv[]) {
 
     /**Receive File*/
     struct file_info new_file;
-    create_file(&new_file,"metalocalypse.wmv");
+    create_file(&new_file,"flick.png");
     long unsigned int bytes_received = 0;
     char* file_holder;
     if(*file_size < 1000000) {
@@ -153,7 +151,7 @@ int main(int argc, char* argv[]) {
                     printf("%ul bytes received\n",bytes_received);
                     printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
                 }
-            }
+            }//
             printf("Writing File\n");
             write_file(&new_file,file_holder,*file_size);
             printf("Free FIle Holder\n");

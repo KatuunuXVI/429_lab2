@@ -1,3 +1,5 @@
+#include <unistd.h>
+#include <stdio.h>
 #define CRC 11
 
 struct file_info {
@@ -100,14 +102,14 @@ int open_file(struct file_info* file, const char* filepath) {
 
 
 
-    /**Return to start of File*/
+    /**Return to start of File*///
     rewind(file->fileptr);
     file->file_position = 0;
     return 0;
 }
 
 int read_file(struct file_info* file, char* buffer, int data_size) {
-    return fread(buffer, 1, data_size, file->fileptr);
+    return fread(buffer, data_size, 1,file->fileptr);
 }
 
 int create_file(struct file_info* new_file, const char* file_path) {
@@ -122,9 +124,13 @@ int create_file(struct file_info* new_file, const char* file_path) {
 
 void write_file(struct file_info* dest, char* data, long data_size) {
     int loaded = 0;
+
+    //fwrite(data, data_size, 1, dest->fileptr);
     while(loaded < data_size) {
+    
         fputc(data[loaded], dest->fileptr);
+
         loaded += 1;
     }
-}
 
+}
