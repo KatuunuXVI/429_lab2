@@ -2,6 +2,8 @@
 #include <stdio.h>
 #define CRC 11
 
+void *memcpy(void *dest, const void * src, size_t n);
+
 struct file_info {
     FILE* fileptr;
     unsigned long int file_len;

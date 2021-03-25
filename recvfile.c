@@ -22,26 +22,32 @@ void *get_in_addr(struct sockaddr *sa) {
 
 
 int recv_data(int* sock, char* buffer, int bytes, const struct sockaddr* source_addr, socklen_t* source_len, unsigned char* index) {
-    printf("Recv Data\n");
     int bytes_received = 0;
     char* ackPacket = malloc(1);
     *ackPacket = 'a';
     int clean_packet = 0;
     struct data_packet* recv_packet = malloc(sizeof(struct data_packet));
     //char* rp = malloc(sizeof(struct data_packet));
-    printf("Recv Allocated\n");
-    //while(!clean_packet) {
 
     while(bytes_received != sizeof(struct data_packet)) {
-        printf("BLocking\n");
-        if((bytes_received = recvfrom(*sock,recv_packet,sizeof(struct data_packet),0,source_addr,source_len)) == -1) {
-            perror("Bytes Received\n");
-            return -1;
+        bytes_received = recvfrom(*sock,recv_packet,sizeof(struct data_packet),0,source_addr,source_len);
+        if(bytes_received == -1) {
+            printf("Error: Incorrect Packet Size %d\n", bytes_received);
+        } else if(bytes_received != sizeof(struct data_packet)) {
+            printf("Error: Incorrect Packet Size %d\n", bytes_received);
         }
     }
-
-    return check_packet_integrity(recv_packet) ? read_data_from_packet(recv_packet,buffer,bytes) : -1;
-
+    if(!check_packet_integrity(recv_packet)) {
+        printf("Error: Packet Compromised\n");
+        return -1;
+    } else if(*index != recv_packet->index) {
+        printf("Error Incorrect Index: expected %d, received %d\n",*index,recv_packet->index);
+        return -1;
+    } else {
+        read_data_from_packet(recv_packet,buffer,bytes);
+        (*index)++;
+        return 0;
+    }
 }
 
 int main(int argc, char* argv[]) {
@@ -54,11 +60,10 @@ int main(int argc, char* argv[]) {
 
     struct addrinfo hints, *p;
 
-    int numbytes;
     struct sockaddr_storage their_addr;
 
     socklen_t addr_len;
-    char s[INET6_ADDRSTRLEN];
+
 
     memset(&hints,0,sizeof hints);
     hints.ai_family = AF_INET6;
@@ -99,20 +104,20 @@ int main(int argc, char* argv[]) {
     /**Receive File Name Length*/
     unsigned char index = 0;
     long unsigned int* file_name_len = malloc(8);
-    recv_data(&sock,file_name_len,8,(struct sockaddr*)&their_addr,&addr_len, &index);
+    while(recv_data(&sock,file_name_len,8,(struct sockaddr*)&their_addr,&addr_len, &index) == -1) printf("Re-Receiving Packet\n");
     void* ack = malloc(1);
     printf("Sending %d\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
     printf("Filename Length: %d\n",*file_name_len);
 
     /**Receive File Name*/
     const char* file_name = malloc(*file_name_len);
-    recv_data(&sock,file_name,*file_name_len,(struct sockaddr*)&their_addr,&addr_len, &index);
+    while(recv_data(&sock,file_name,*file_name_len,(struct sockaddr*)&their_addr,&addr_len, &index) == -1) printf("Re-Receiving Packet\n");
     printf("Sending %d\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
     printf("Filename: %s\n",file_name);
 
     /**Receive File Size*/
     long unsigned int* file_size = malloc(8);
-    recv_data(&sock,file_size,8,(struct sockaddr*)&their_addr,&addr_len,&index);
+    while(recv_data(&sock,file_size,8,(struct sockaddr*)&their_addr,&addr_len,&index) == -1) printf("Re-Receiving Packet\n");
     printf("Sending %d\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
     printf("File size: %ul\n",*file_size);
 
@@ -121,43 +126,29 @@ int main(int argc, char* argv[]) {
     create_file(&new_file,"flick.png");
     long unsigned int bytes_received = 0;
     char* file_holder;
-    if(*file_size < 1000000) {
-        file_holder = malloc(*file_size);
-        while(bytes_received < *file_size) {
-            if(*file_size - bytes_received > 256) {
-                bytes_received += recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index);
-                printf("%ul bytes received\n",bytes_received);
-                printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
-            } else {
-                bytes_received += recv_data(&sock,file_holder+bytes_received,(*file_size) - bytes_received,(struct sockaddr*)&their_addr,&addr_len,&index);
-                printf("%ul bytes received\n",bytes_received);
-                printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
-            }
-        }
-        write_file(&new_file,file_holder,*file_size);
-    } else {
-        while(new_file.file_len < *file_size) {
-            int file_block = (*file_size) - new_file.file_len > 1000000 ? 1000000 : (*file_size) - new_file.file_len;
-            printf("File Block: %d\n",file_block);
-            file_holder = malloc(file_block);
-            printf("File Holder Allocated\n");
-            while(bytes_received < file_block) {
-                if(*file_size - bytes_received > 256) {
-                    bytes_received += recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index);
-                    printf("%ul bytes received\n",bytes_received);
-                    printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
-                } else {
-                    bytes_received += recv_data(&sock,file_holder+bytes_received,(*file_size) - bytes_received,(struct sockaddr*)&their_addr,&addr_len,&index);
-                    printf("%ul bytes received\n",bytes_received);
-                    printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
-                }
-            }//
-            printf("Writing File\n");
-            write_file(&new_file,file_holder,*file_size);
-            printf("Free FIle Holder\n");
-            free(file_holder);
+
+    file_holder = malloc(*file_size);
+    while(bytes_received < *file_size) {
+        if(*file_size - bytes_received > 256) {
+            while(recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index) == -1) {
+                printf("Re-Receiving Packet\n");
+            };
+            printf("[Receive Data] %ul (%ul)\n",bytes_received,256);
+            bytes_received += 256;
+            sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr));
+            //printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
+        } else {
+            while(recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index) == -1) {
+                printf("Re-Receiving Packet\n");
+            };
+            printf("[Receive Data] %ul (%ul)\n",bytes_received,*file_size - bytes_received);
+            bytes_received = *file_size;
+            sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr));
+            //printf("Sending Acknowledgement\n",);
         }
     }
+    write_file(&new_file,file_holder,*file_size);
+
 
 
 

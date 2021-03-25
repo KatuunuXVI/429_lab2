@@ -7,14 +7,11 @@ DEFS 	 	=
 
 all:	sendfile recvfile
 
-sendfile: sendfile.c
+source/sendfile: sendfile.c
 	$(CC) $(DEFS) $(CFLAGS) $(LIB) -o source/sendfile sendfile.c
 
-recvfile: recvfile.c
+dest/recvfile: recvfile.c
 	$(CC) $(DEFS) $(CFLAGS) $(LIB) -o dest/recvfile recvfile.c
-
-oldsend: oldsend.c
-	$(CC) $(DEFS) $(CFLAGS) $(LIB) -o oldsend oldsend.c
 
 
 clean:
@@ -22,5 +19,5 @@ clean:
 	rm -f *~
 	rm -f core.*.*
 	rm -f source/sendfile
-	rm -f dest/recvfile
+	rm -f recvfile
 	
