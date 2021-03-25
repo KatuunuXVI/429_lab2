@@ -127,12 +127,12 @@ int create_file(struct file_info* new_file, const char* file_path) {
 void write_file(struct file_info* dest, char* data, long data_size) {
     int loaded = 0;
 
-    //fwrite(data, data_size, 1, dest->fileptr);
-    while(loaded < data_size) {
+    fwrite(data, data_size, 1, dest->fileptr);
+    /*while(loaded < data_size) {
     
         fputc(data[loaded], dest->fileptr);
 
         loaded += 1;
-    }
+    }*/
 
 }
