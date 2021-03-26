@@ -13,7 +13,8 @@ struct file_info {
 
 struct data_frame {
     char data[8];
-    unsigned char r; /**Remainder of divided value*/
+    unsigned char r1; /**Remainder of divided value*/
+    unsigned char r2;
 };
 
 struct data_packet {
@@ -40,7 +41,8 @@ void write_data_to_packet(struct data_packet* packet, char* data, int size) {
         memcpy(packet->frames[i].data, data+8*i,8);
         unsigned long int* datal = packet->frames[i].data;
 
-        packet->frames[i].r = (unsigned short int) (*datal)%CRC;
+        packet->frames[i].r1 = (unsigned short int) (*datal)%CRC;
+        packet->frames[i].r2 = (unsigned short int) (*datal)%CRC;
     }
 }
 
@@ -81,7 +83,7 @@ int check_packet_integrity(struct data_packet* packet) {
 
 int check_frame(struct data_frame frame) {
     //unsigned long int* con = frame.data;
-    return (unsigned short int)(*((unsigned long int*) frame.data))%CRC == frame.r;
+    return ((unsigned short int)(*((unsigned long int*) frame.data))%CRC == frame.r1) && ((unsigned short int)(*((unsigned long int*) frame.data))%CRC == frame.r2);
 }
 
 

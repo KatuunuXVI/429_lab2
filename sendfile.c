@@ -10,7 +10,6 @@
 #include <netdb.h>
 #include <string.h>
 #include "fileinfo.h"
-#define SERVERPORT "18005"
 #define MAXBUFLEN 100
 #define CRC 11
 
@@ -42,6 +41,7 @@ int send_data(int* sock, char* data, int bytes, const struct sockaddr* dest_addr
         //printf("Receiving\n");
         if(recvfrom(*sock, ackPacket, 1,0,NULL, dest_len) == -1) {
             printf("No Acknowledgement Received, Resending Index %d\n", *index);
+            printf("Packet Integrity: %d\n",check_packet_integrity(&packet));
             bytes_sent = 0;
         } else {
             ack_received = 1;
@@ -55,33 +55,12 @@ int send_data(int* sock, char* data, int bytes, const struct sockaddr* dest_addr
 
 
 int main(int argc, char*argv[]) {
+    const char ip[strlen(argv[2])-6];
+    const char port[5];
+    memcpy(ip,argv[2],strlen(argv[2])-6);
+    memcpy(port,argv[2]+strlen(ip)+1,5);
 
 
-
-    const char* sample = "Your mother is upset with you anon\n";
-
-
-    /*a
-    int error_code;/
-    struct file_info original;
-    if((error_code = open_file(&original, "../ur/command.wmv")) != 0) return -1;
-    printf("FIle Size: %d\n", original.file_len);
-    //printf("%s\n",navyseals);
-    struct file_info copy;
-    printf("Creating Ur\n");
-    if(create_file(&copy,"../ur/numand.wmv") != 0) return -1;
-    printf("Ur Created at %d\n", copy.fileptr);
-    int read = 0;
-    int prev_read;
-    char* data;
-    while(read < original.file_len) {
-        prev_read = read;
-        data = malloc(1000000);
-        read += read_file(&original,data,1000000);
-        write_file(&copy,data,read-prev_read);
-        free(data);
-    }
-    return 0;*/
     if(argc != 5) {
         fprintf(stderr, "usage:sendfile -r <recv host>:<recv port> -f <subdir>/<filename>\n");
         exit(1);
@@ -107,7 +86,6 @@ int main(int argc, char*argv[]) {
     int sock;
     struct addrinfo hints, *servinfo, *p;
 
-    int numbytes;
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -116,7 +94,7 @@ int main(int argc, char*argv[]) {
 
     int rv;
     printf("Hostname: %s\n",argv[2]);
-    if((rv = getaddrinfo(argv[2], SERVERPORT, &hints, &servinfo)) != 0) {
+    if((rv = getaddrinfo(ip, port, &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n",gai_strerror(rv));
         return 1;
     }
@@ -140,8 +118,8 @@ int main(int argc, char*argv[]) {
 
     /**Set Timeout Window*/
     struct timeval tv;
-    tv.tv_sec = 20;
-    tv.tv_usec = 0;
+    tv.tv_sec = 0;
+    tv.tv_usec = 500000;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
     /**Send Filename Length*/
@@ -171,11 +149,11 @@ int main(int argc, char*argv[]) {
     read_file(&to_send,file_holder,to_send.file_len);
     while(bytes_sent < to_send.file_len) {
         if(to_send.file_len - bytes_sent > 256) {
-            printf("[Send Data] %lu (%lu)\n",bytes_sent,256);
+            printf("[Send Data] %lu (%d)\n",bytes_sent,256);
             send_data(&sock,file_holder+bytes_sent,256,p->ai_addr,p->ai_addrlen,&send_index);
             bytes_sent += 256;
         } else {
-            printf("[Send Data] %lu (%lu)\n",bytes_sent,to_send.file_len - bytes_sent);
+            printf("[Send Data] %lu (%d)\n",bytes_sent,to_send.file_len - bytes_sent);
             send_data(&sock,file_holder+bytes_sent,to_send.file_len - bytes_sent,p->ai_addr,p->ai_addrlen,&send_index);
             bytes_sent = to_send.file_len;
 

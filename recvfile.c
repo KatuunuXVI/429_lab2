@@ -37,12 +37,12 @@ int recv_data(int* sock, char* buffer, int bytes, const struct sockaddr* source_
             printf("Error: Incorrect Packet Size %d\n", bytes_received);
         }
     }
-    if(!check_packet_integrity(recv_packet)) {
+    if((!check_packet_integrity(recv_packet)) || (*index < recv_packet->index)) {
         printf("Error: Packet Compromised\n");
         return -1;
-    } else if(*index != recv_packet->index) {
+    } else if(*index > recv_packet->index) {
         printf("Error Incorrect Index: expected %d, received %d\n",*index,recv_packet->index);
-        return -1;
+        return -2;
     } else {
         read_data_from_packet(recv_packet,buffer,bytes);
         (*index)++;
@@ -104,22 +104,22 @@ int main(int argc, char* argv[]) {
     /**Receive File Name Length*/
     unsigned char index = 0;
     long unsigned int* file_name_len = malloc(8);
-    while(recv_data(&sock,file_name_len,8,(struct sockaddr*)&their_addr,&addr_len, &index) == -1) printf("Re-Receiving Packet\n");
+    while(recv_data(&sock,file_name_len,8,(struct sockaddr*)&their_addr,&addr_len, &index) != 0) printf("Re-Receiving Packet\n");
     void* ack = malloc(1);
     printf("Sending %d\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
     printf("Filename Length: %d\n",*file_name_len);
 
     /**Receive File Name*/
     const char* file_name = malloc(*file_name_len);
-    while(recv_data(&sock,file_name,*file_name_len,(struct sockaddr*)&their_addr,&addr_len, &index) == -1) printf("Re-Receiving Packet\n");
+    while(recv_data(&sock,file_name,*file_name_len,(struct sockaddr*)&their_addr,&addr_len, &index) != 0) printf("Re-Receiving Packet\n");
     printf("Sending %d\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
     printf("Filename: %s\n",file_name);
 
     /**Receive File Size*/
     long unsigned int* file_size = malloc(8);
-    while(recv_data(&sock,file_size,8,(struct sockaddr*)&their_addr,&addr_len,&index) == -1) printf("Re-Receiving Packet\n");
-    printf("Sending %d\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
-    printf("File size: %ul\n",*file_size);
+    while(recv_data(&sock,file_size,8,(struct sockaddr*)&their_addr,&addr_len,&index) != 0) printf("Re-Receiving Packet\n");
+    sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr));
+    printf("File size: %lul\nAcknowledgement Sent\n",*file_size);
 
     /**Receive File*/
     struct file_info new_file;
@@ -129,26 +129,36 @@ int main(int argc, char* argv[]) {
 
     file_holder = malloc(*file_size);
     while(bytes_received < *file_size) {
+        int rv;
         if(*file_size - bytes_received > 256) {
-            while(recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index) == -1) {
+            while((rv = recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index)) != 0) {
+                if(rv == -2) {
+                    printf("Sender Index Out of Line - Resending Acknowledgement");
+                    sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr));
+                }
                 printf("Re-Receiving Packet\n");
+
             };
-            printf("[Receive Data] %ul (%ul)\n",bytes_received,256);
+            printf("[Receive Data] %lu (%d)\n",bytes_received,256);
             bytes_received += 256;
             sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr));
             //printf("Sending Acknowledgement\n",sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr)));
         } else {
-            while(recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index) == -1) {
+            while(recv_data(&sock,file_holder+bytes_received,256,(struct sockaddr*)&their_addr,&addr_len,&index) != 0) {
+                if(rv == -2) {
+                    printf("Sender Index Out of Line - Resending Acknowledgement");
+                    sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr));
+                }
                 printf("Re-Receiving Packet\n");
-            };
-            printf("[Receive Data] %ul (%ul)\n",bytes_received,*file_size - bytes_received);
+            }
+            printf("[Receive Data] %lu (%d)\n",bytes_received,*file_size - bytes_received);
             bytes_received = *file_size;
             sendto(sock, &ack, 1,0,(struct sockaddr*)&their_addr, sizeof(their_addr));
             //printf("Sending Acknowledgement\n",);
         }
     }
     write_file(&new_file,file_holder,*file_size);
-
+    fclose(new_file.fileptr);
 
 
 
